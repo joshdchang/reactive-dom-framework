@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="UTF-8">
+  <title>Test</title>
+</head>
+
+<body>
+  <div id="root">
+
+  </div>
+  <script>
+
+    // Library
+
+    // TODO: convert to dependency tracking through call stack rather than explicit deps
+    // TODO: add fragments
+
+    class Signal {
+      constructor(initialValue) {
+        this.value = initialValue
+        this.listeners = new Set()
+      }
+
+      set(newValue) {
+        this.value = newValue
+        this.listeners.forEach(listener => listener())
+      }
+
+      get() {
+        return this.value
+      }
+
+      subscribe(listener) {
+        this.listeners.add(listener)
+        return () => this.listeners.delete(listener) // unsubscribe
+      }
+    }
+
+    class Template {
+      constructor(template, ...values) {
+        this.template = template
+        this.values = values
+        this.deps = []
+        for (let i = 0; i < values.length; i++) {
+          if (values[i] instanceof Signal) {
+            this.deps.push(values[i])
+          }
+        }
+      }
+      render() {
+        let str = ''
+        for (let i = 0; i < this.values.length; i++) {
+          str += this.template[i]
+          if (this.values[i] instanceof Signal) {
+            str += this.values[i].get()
+          } else {
+            str += this.values[i]
+          }
+        }
+        return str + this.template[this.template.length - 1]
+      }
+    }
+
+    class Effect {
+      constructor(fn, deps) {
+        fn()
+        this.fn = fn
+        this.deps = deps
+        for (let dep of deps) {
+          dep.subscribe(() => this.run())
+        }
+      }
+      run() {
+        this.fn()
+      }
+    }
+
+    class Element {
+      constructor(tag, attributes, children) {
+        this.tag = tag
+        this.attributes = attributes
+        this.children = children
+        this.DOM = null
+      }
+
+      toDOM() {
+        if (this.DOM) {
+          return this.DOM
+        }
+        this.DOM = document.createElement(this.tag)
+        for (let attribute in this.attributes) {
+          if (this.attributes[attribute] instanceof Signal) {
+            new Effect(() => {
+              this.DOM[attribute] = this.attributes[attribute].get()
+            }, [this.attributes[attribute]])
+            continue
+          }
+          if (this.attributes[attribute] instanceof Template) {
+            new Effect(() => {
+              this.DOM[attribute] = this.attributes[attribute].render()
+            }, this.attributes[attribute].deps)
+            continue
+          }
+          this.DOM[attribute] = this.attributes[attribute]
+        }
+        for (let child of this.children) {
+          if (typeof child === 'string') {
+            this.DOM.appendChild(document.createTextNode(child))
+            continue
+          }
+          if (child instanceof Signal) {
+            const textNode = document.createTextNode('') 
+            this.DOM.appendChild(textNode)
+            new Effect(() => {
+              textNode.textContent = child.get()
+            }, [child])
+            continue
+          }
+          if (child instanceof Template) {
+            const textNode = document.createTextNode('')
+            this.DOM.appendChild(textNode)
+            new Effect(() => {
+              textNode.textContent =  child.render()
+            }, child.deps)
+            continue
+          }
+          this.DOM.appendChild(child.toDOM())
+        }
+        return this.DOM
+      }
+    }
+
+    function t(strings, ...values) {
+      return new Template(strings, ...values)
+    }
+
+    function e(tag, attributes, ...children) {
+      return new Element(tag, attributes, children)
+    }
+
+    // Test
+
+    let count = new Signal(0)
+
+    let app =
+      e('div', { id: t`${count.get()}` },
+        t`Count: ${count.get()}`,
+        e('br'),
+        e('button', { 
+          onclick: () => count.set(count.get() + 1),
+        }, 'Increment')
+      )
+
+    // mount
+
+    let root = document.getElementById('root')
+    root.appendChild(app.toDOM())
+
+  </script>
+</body>
+
+</html>
