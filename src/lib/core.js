@@ -1,13 +1,17 @@
-// TODO: improve attributes (e.g. class, style, etc.) and events (e.g. onclick, oninput, etc.)
-// TODO: built in helper functions for loops, conditionals, etc.
-// TODO: keep on refactoring renderer to be more extensible and efficient (allowing unsubscribing to things that are no longer needed, lifecycle hooks, etc.)
+// TODO: improve attributes (e.g. class, style, etc.) and events (e.g. onclick, oninput, etc.) (make into signals? or just allow them to be signals)
+// TODO: add functions to dynamic renderer (just pass it back as a one element array)
+// TODO: make function that takes in array of strings and returns object with functions for each string
+// TODO: separate out the renderer from the framework
+// TODO: keep on refactoring renderer to be more extensible and efficient (DucumentFragment? promises? )
+// TODO: unsubscribing and lifecycle hooks
 // TODO: refs as a way to access DOM nodes in effects
+// TODO: router
 // TODO: render directly to strings (for SSR)
 // TODO: hydration
 
 const effectStack = []
 
-class Signal {
+export class Signal {
   constructor(initialValue) {
     this.value = initialValue
     this.listeners = new Set()
@@ -28,7 +32,7 @@ class Signal {
   }
 }
 
-class Effect {
+export class Effect {
   constructor(fn) {
     effectStack.push(this)
     this.fn = fn
@@ -43,72 +47,12 @@ class Effect {
   }
 }
 
-class Element {
+export class Element {
   constructor(tag, attributes, children) {
     this.tag = tag
     this.attributes = attributes
     this.children = children
     this.node = null
-  }
-
-  static appendChildren(node, children) {
-    for (let child of children) {
-
-      if (child instanceof Element) {
-        node.appendChild(child.toNode())
-
-      } else if (typeof child === 'function') {
-
-        const anchor = document.createTextNode('')
-        node.appendChild(anchor)
-        let lastArrayNodes = []
-
-        new Effect(() => {
-
-          const result = child()
-
-          for (const lastArrayNode of lastArrayNodes) {
-            lastArrayNode.remove()
-          }
-          lastArrayNodes = []
-
-          if (Array.isArray(result)) {
-
-            const flattened = result.flat(Infinity)
-            const newNodes = flattened.map(child => child instanceof Element ? child.toNode() : document.createTextNode(child))
-            anchor.replaceWith(anchor, ...newNodes)
-            lastArrayNodes = newNodes
-
-          } else if (result instanceof Element) {
-            const newNode = result.toNode()
-            anchor.replaceWith(newNode)
-
-          } else if (result !== undefined && result !== null) {
-            anchor.textContent = result
-
-          } else {
-            anchor.textContent = ''
-          }
-        })
-      } else if (Array.isArray(child)) {
-        Element.appendChildren(node, child)
-
-      } else if (child !== undefined && child !== null) {
-        node.appendChild(document.createTextNode(child))
-      }
-    }
-  }
-
-  toNode() {
-    if (this.node) {
-      return this.node
-    }
-    this.node = document.createElement(this.tag)
-    for (let attribute in this.attributes) {
-      this.node[attribute] = this.attributes[attribute]
-    }
-    Element.appendChildren(this.node, this.children)
-    return this.node
   }
 }
 
@@ -156,23 +100,17 @@ for (let elementName of elementNames) {
     let attributes = {}
     let children = []
     for (let arg of args) {
-      if (Array.isArray(arg)) {
-        children = arg
-      } else if (typeof arg === 'object') {
-        attributes = arg
-      } else if (typeof arg === 'string' || typeof arg === 'number' || typeof arg === 'boolean' || typeof arg === 'function') {
+      if (typeof arg === 'object') {
+        if (Array.isArray(arg) || arg instanceof Element) {
+          children.push(arg)
+        }
+        else {
+          attributes = arg
+        }
+      }
+      else {
         children.push(arg)
       }
-    }
-    if (args.length === 1) {
-      if (Array.isArray(args[0])) {
-        children = args[0]
-      } else {
-        attributes = args[0]
-      }
-    } else if (args.length === 2) {
-      attributes = args[0]
-      children = args[1]
     }
     return elem(elementName, attributes, children)
   }
