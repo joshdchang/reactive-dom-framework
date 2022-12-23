@@ -13,11 +13,11 @@
   <script type="module">
 
     import './src/main.css'
-    import app from './src/app.js'
-    import { toNode } from './src/lib/dom.js'
+    import app from './src/app'
+    import { render } from './src/lib/dom'
 
-    document.getElementById('app').appendChild(toNode(app()))
-
+    render(app(), document.getElementById('app'))
+    
   </script>
 </body>
 

@@ -1,15 +1,7 @@
-// TODO: improve attributes (e.g. class, style, etc.) and events (e.g. onclick, oninput, etc.) (make into signals? or just allow them to be signals)
-// TODO: add functions to dynamic renderer (just pass it back as a one element array)
-// TODO: make function that takes in array of strings and returns object with functions for each string
-// TODO: separate out the renderer from the framework
-// TODO: keep on refactoring renderer to be more extensible and efficient (DucumentFragment? promises? )
-// TODO: unsubscribing and lifecycle hooks
-// TODO: refs as a way to access DOM nodes in effects
+
 // TODO: router
 // TODO: render directly to strings (for SSR)
 // TODO: hydration
-
-const effectStack = []
 
 export class Signal {
   constructor(initialValue) {
@@ -21,8 +13,8 @@ export class Signal {
     this.listeners.forEach(listener => listener())
   }
   get() {
-    if (effectStack.length > 0) {
-      effectStack[effectStack.length - 1].addDep(this)
+    if (Effect.stack.length > 0) {
+      this.listeners.add(Effect.stack[Effect.stack.length - 1].run)
     }
     return this.value
   }
@@ -33,17 +25,16 @@ export class Signal {
 }
 
 export class Effect {
-  constructor(fn) {
-    effectStack.push(this)
-    this.fn = fn
-    this.fn()
-    effectStack.pop()
+  constructor(run) {
+    this.run = run
   }
-  run() {
-    this.fn()
-  }
-  addDep(dep) {
-    dep.subscribe(() => this.run())
+  static stack = []
+  static custom = []
+  static mounted = false
+  activate() {
+    Effect.stack.push(this)
+    this.run()
+    Effect.stack.pop()
   }
 }
 
@@ -53,6 +44,7 @@ export class Element {
     this.attributes = attributes
     this.children = children
     this.node = null
+    this.effects = []
   }
 }
 
@@ -67,7 +59,7 @@ export function t_(strings, ...values) {
   return collection
 }
 
-export function elem(tag = 'div', attributes = {}, children = []) {
+export function elem(tag, attributes = {}, children = []) {
   return new Element(tag, attributes, children)
 }
 
@@ -77,9 +69,16 @@ export function createSignal(value) {
 }
 
 export function createEffect(fn) {
-  return new Effect(fn)
+  const effect = new Effect(fn)
+  if (Effect.mounted) {
+    effect.activate()
+  } else {
+    Effect.custom.push(effect)
+  }
+  return effect
 }
 
+// not sure this will render properly with new rendering system or SSR - maybe make into its own Memo class?
 export function createMemo(fn) {
   let value
   const [get, set] = createSignal()
@@ -93,25 +92,27 @@ export function createMemo(fn) {
   }
 }
 
-const elementNames = ['html', 'base', 'head', 'link', 'meta', 'style', 'title', 'body', 'address', 'article', 'aside', 'footer', 'header', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'hgroup', 'main', 'nav', 'section', 'div', 'dd', 'dl', 'dt', 'figcaption', 'figure', 'hr', 'li', 'main', 'ol', 'p', 'pre', 'ul', 'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'kbd', 'mark', 'q', 'rb', 'rp', 'rt', 'rtc', 'ruby', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr', 'area', 'audio', 'img', 'map', 'track', 'video', 'embed', 'object', 'param', 'source', 'canvas', 'noscript', 'script', 'del', 'ins', 'caption', 'col', 'colgroup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'button', 'datalist', 'fieldset', 'form', 'input', 'label', 'legend', 'meter', 'optgroup', 'option', 'output', 'progress', 'select', 'textarea', 'details', 'dialog', 'menu', 'menuitem', 'summary', 'content', 'element', 'shadow', 'template', 'blockquote', 'iframe', 'tfoot']
-export const elements = {}
-for (let elementName of elementNames) {
-  elements[elementName] = function (...args) {
-    let attributes = {}
-    let children = []
-    for (let arg of args) {
-      if (typeof arg === 'object') {
-        if (Array.isArray(arg) || arg instanceof Element) {
-          children.push(arg)
+export function createTags(elementNames) {
+  const elements = {}
+  for (let elementName of elementNames) {
+    elements[elementName] = function (...args) {
+      let attributes = {}
+      let children = []
+      for (let arg of args) {
+        if (typeof arg === 'object') {
+          if (Array.isArray(arg) || arg instanceof Element) {
+            children.push(arg)
+          }
+          else {
+            attributes = arg
+          }
         }
         else {
-          attributes = arg
+          children.push(arg)
         }
       }
-      else {
-        children.push(arg)
-      }
+      return elem(elementName, attributes, children)
     }
-    return elem(elementName, attributes, children)
   }
+  return elements
 }
