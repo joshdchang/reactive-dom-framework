@@ -56,6 +56,7 @@ export function t_(strings, ...values) {
       collection.push(values[i])
     }
   }
+  collection.isTemplate = true
   return collection
 }
 

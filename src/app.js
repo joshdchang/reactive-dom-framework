@@ -12,7 +12,8 @@ export default function App() {
 
   return (
     div({
-      class: 'bg-red-100 p-10 text-gray-800 font-bold text-3xl text-center h-screen grid place-items-center'
+      class: 'bg-red-100 p-10 text-gray-800 font-bold text-3xl text-center h-screen grid place-items-center',
+      id: t_`test-${timer}`
     }, [
       timer,
       button({
